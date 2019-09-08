@@ -22,6 +22,7 @@ conf.read('config.ini')
 host = conf['server']['host']
 port = int(conf['server']['port'])
 debug = conf['system']['debug']
+server = conf['system']['host']
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -29,7 +30,7 @@ if debug == 'True' or debug == 'true':
     app.debug = True
 
 
-@app.route('/')
+@app.route('/api')
 def index():
     res = {
         "status": 0,
@@ -45,11 +46,16 @@ def upload():
         basepath = os.path.dirname(__file__)
         upload_path = os.path.join(
             basepath, 'static/images', secure_filename(f.filename))
-        f.save(upload_path)
+        if os.path.isfile(upload_path):
+            os.remove(upload_path)
+            f.save(upload_path)
+        else:
+            f.save(upload_path)
         res = {
             "code": 0,
             "msg": "上传成功",
-            "url": f"http://{host}:{port}/static/images/{f.filename}"
+            "name": f.filename,
+            "url": f"http://{server}/static/images/{f.filename}"
         }
         return json.dumps(res)
 
@@ -64,24 +70,53 @@ def finder():
             location = Location(file_path)
             address, take_time = location.run()
             if take_time:
+                ok = True
                 shut_time = str(take_time).split(" ")[0].replace(":", "-")
                 toady = location.judge_time_met(take_time)
             else:
-                shut_time = None
+                ok = False
+                shut_time = str(datetime.date.today())
                 toady = False
             res = {
                 "code": 0,
                 "data": {
+                    "ok": ok,
                     "address": address,
                     "shut_time": shut_time,
                     "is_today": toady,
-                    "picture": f"http://{host}:{port}/static/images/{f}"
+                    "picture": f"http://{server}/static/images/{f}"
                 }
             }
         else:
             res = {
                 "code": 1,
                 "msg": "请先上传高清大图"
+            }
+        return json.dumps(res)
+
+
+@app.route('/api/delete', methods=['POST'])
+def delete():
+    if request.method == 'POST':
+        f = request.form.get('filename')
+        basepath = os.path.dirname(__file__)
+        file_path = os.path.join(basepath, 'static/images', secure_filename(f))
+        if os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+                res = {
+                    "code": 0,
+                    "msg": '删除成功'
+                }
+            except Exception as e:
+                res = {
+                    "code": 1,
+                    "msg": e
+                }
+        else:
+            res = {
+                "code": 1,
+                "msg": "未找到相关图片"
             }
         return json.dumps(res)
 
